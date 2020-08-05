@@ -1,0 +1,2 @@
+powershell %~dp0\build.ps1 -target "Report_DotCover" -ScriptArgs '-targetDirectory=%1 -solutionFile=%2 -workingDirectory=%localappdata%/CodeCoverage -reportName=CoverageReport'
+%localappdata%/CodeCoverage/CoverageReport.html
