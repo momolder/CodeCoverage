@@ -21,20 +21,15 @@ var dotCoverFileName = File("results.dotcover.html");
 var testResultFilePath = Directory(workingDirectory) + testResultsFileName;
 var openCoverFilePath = Directory(workingDirectory) + openCoverFileName;
 var dotCoverFilePath = Directory(workingDirectory) + dotCoverFileName;
+var testAssemblies = GetFiles(Directory(targetDirectory) + File(filter));
 
 ///////////////////////////////////////////////////////////////////////////////
 // SETUP / TEARDOWN
 ///////////////////////////////////////////////////////////////////////////////
 
-Setup(ctx => {
-    // Executed BEFORE the first task.
-    Information("Running tasks...");
-});
+Setup(ctx => Information("Running tasks..."));
 
-Teardown(ctx => {
-    // Executed AFTER the last task.
-    Information("Finished running tasks.");
-});
+Teardown(ctx => Information("Finished running tasks."));
 
 ///////////////////////////////////////////////////////////////////////////////
 // FUNCTIONS
@@ -53,28 +48,23 @@ Task("Clean")
 
 Task("Build")
     .IsDependentOn("Clean")
-    .Does(() => {
-        var settings = new MSBuildSettings {
-            Verbosity = Verbosity.Minimal,
-            Configuration = configuration
-        };
-
-        MSBuild(solutionFile, settings);
-});
+    .Does(() => 
+        MSBuild(solutionFile, settings => 
+            settings.SetVerbosity(Verbosity.Minimal)
+                    .SetConfiguration(configuration)
+                    .WithTarget("Build")));
 
 Task("OpenCover")
     .IsDependentOn("Build")
-    .Does(() => {
-        var testAssemblies = GetFiles(Directory(targetDirectory) + File(filter));
-        OpenCover(tool => {
+    .Does(() => 
+        OpenCover(tool => 
             tool.NUnit3(testAssemblies,
                 new NUnit3Settings {
                     ShadowCopy = false,
                     NoHeader = true,
                     WorkingDirectory = workingDirectory,
                     Results = new[] { new NUnit3Result { FileName = testResultFilePath }}
-                });
-            },
+                }),
             openCoverFilePath,
             new OpenCoverSettings {
                 TargetDirectory = targetDirectory,
@@ -82,46 +72,38 @@ Task("OpenCover")
             }
             .WithFilter("+[*]*")
             .WithFilter("-[nunit*]*")
-        );
-});
+        ));
 
 Task("DotCover")
     .IsDependentOn("Build")
     .ContinueOnError()
-    .Does(() => {
-        var testAssemblies = GetFiles(Directory(targetDirectory) + File("**/*Test.dll"));
-        DotCoverCover(tool => {
+    .Does(() =>
+        DotCoverCover(tool => 
             tool.NUnit3(testAssemblies,
                 new NUnit3Settings {
                     ShadowCopy = false,
                     NoHeader = true,
                     WorkingDirectory = workingDirectory,
                     Results = new[] { new NUnit3Result { FileName = testResultFilePath }}
-            });
-        },
+            }),
         dotCoverFilePath,
         new DotCoverCoverSettings {
-            ArgumentCustomization = args => args.Append($"--ReportType=HTML"),
+            ArgumentCustomization = args => args.Append($"--ReportType={reportTypes}"),
             TargetWorkingDir = workingDirectory,
             WorkingDirectory = workingDirectory
-        });
-});
+        }));
 
 Task("Report_DotCover")
     .IsDependentOn("DotCover")
-    .Does(() => {
-        CopyFile(dotCoverFilePath, Directory(workingDirectory) + File(reportName + dotCoverFilePath.Path.GetExtension()));
-});  
+    .Does(() => CopyFile(dotCoverFilePath, Directory(workingDirectory) + File(reportName + dotCoverFilePath.Path.GetExtension())));  
 
 Task("Report_OpenCover")
     .IsDependentOn("OpenCover")
-    .Does(() => {
-        var settings = new ReportGeneratorSettings {
+    .Does(() => 
+        ReportGenerator(openCoverFilePath, workingDirectory, new ReportGeneratorSettings {
             ArgumentCustomization = args => args.Append($"-reportTypes:{reportTypes}"),
             SourceDirectories = new System.Collections.Generic.List<Cake.Core.IO.DirectoryPath> { Directory(targetDirectory) },
             WorkingDirectory = workingDirectory
-        };
-        ReportGenerator(openCoverFilePath, workingDirectory, settings);
-});
+        }));
 
 RunTarget(target);
